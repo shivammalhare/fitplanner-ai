@@ -1,33 +1,47 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { LoadingScreen } from './components/animations/loadingScreen';
+import { Header } from './components/layout/Header';
+import { Footer } from './components/layout/Footer';
+import { PageTransition } from './components/layout/PageTransition';
+import { Dashboard } from './pages/Dashboard';
+import { WorkoutPlanner } from './pages/WorkoutPlanner';
+import { Progress } from './pages/Progress';
+import { Profile } from './pages/Profile';
 import { AuthForm } from './components/AuthForm';
 import { useAuth } from './hooks/useAuth';
 
 function App() {
   const { user, loading } = useAuth();
 
-  // Quick test div with obvious Tailwind classes
-  return (
-    <div className="App">
-      {/* Test div - remove this after confirming styles work */}
-      <div className="bg-red-500 text-white p-4 text-center">
-        🚨 If you see red background, TailwindCSS is working! 🚨
-      </div>
-      
-      {loading ? (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900">
-          <div className="text-white text-xl">Loading...</div>
-        </div>
-      ) : !user ? (
+  if (loading) {
+    return <LoadingScreen isLoading={loading} />;
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
         <AuthForm />
-      ) : (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold mb-4">Welcome to FitPlanner AI!</h1>
-            <p className="text-gray-400">You are logged in as: {user.email}</p>
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <div className="App min-h-screen bg-gradient-to-br from-gray-900 to-black">
+        <Header />
+        <PageTransition>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/workout" element={<WorkoutPlanner />} />
+            <Route path="/progress" element={<Progress />} />
+            <Route path="/profile" element={<Profile />} />
+          </Routes>
+        </PageTransition>
+        <Footer />
+      </div>
+    </Router>
   );
 }
 

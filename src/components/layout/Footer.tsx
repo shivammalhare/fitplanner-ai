@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
           Your AI-powered fitness companion for smarter workouts
         </p>
         <p className="text-gray-500 text-sm">
-          © 2024 FitPlanner AI. Built with ❤️ for fitness enthusiasts.
+          © 2025 FitPlanner AI. Built By Shivam with ❤️ for fitness enthusiasts.
         </p>
       </div>
     </motion.footer>
