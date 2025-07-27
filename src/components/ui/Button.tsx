@@ -17,11 +17,11 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseClasses = `
-    font-medium rounded-lg transition-all duration-200 
+    font-semibold rounded-xl transition-all duration-200 
     focus:outline-none focus:ring-2 focus:ring-offset-2
-    transform hover:scale-105 active:scale-95
+    transform active:scale-95 touch-manipulation
     disabled:opacity-50 disabled:cursor-not-allowed
-    disabled:hover:scale-100 disabled:active:scale-100
+    disabled:active:scale-100
   `;
   
   const variantClasses = {
@@ -31,9 +31,9 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
+    sm: 'px-4 py-2 text-sm min-h-[44px]', // Minimum 44px for mobile touch
+    md: 'px-6 py-3 text-base min-h-[48px]',
+    lg: 'px-8 py-4 text-lg min-h-[52px]',
   };
 
   return (
@@ -50,7 +50,7 @@ export const Button: React.FC<ButtonProps> = ({
     >
       {loading ? (
         <div className="flex items-center justify-center space-x-2">
-          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           <span>Loading...</span>
         </div>
       ) : (
