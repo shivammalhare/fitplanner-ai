@@ -1,9 +1,10 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'link';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
+  block?: boolean;
   children: React.ReactNode;
 }
 
@@ -11,6 +12,7 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   size = 'md',
   loading = false,
+  block = false,
   children,
   className = '',
   disabled,
@@ -23,15 +25,16 @@ export const Button: React.FC<ButtonProps> = ({
     disabled:opacity-50 disabled:cursor-not-allowed
     disabled:active:scale-100
   `;
-  
-  const variantClasses = {
+
+  const variantClasses: Record<string, string> = {
     primary: 'bg-orange-500 hover:bg-orange-600 text-white focus:ring-orange-500 shadow-lg hover:shadow-xl',
     secondary: 'bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500 shadow-lg hover:shadow-xl',
     danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500 shadow-lg hover:shadow-xl',
+    link: 'text-orange-500 underline hover:text-orange-400 bg-transparent shadow-none',
   };
 
-  const sizeClasses = {
-    sm: 'px-4 py-2 text-sm min-h-[44px]', // Minimum 44px for mobile touch
+  const sizeClasses: Record<string, string> = {
+    sm: 'px-4 py-2 text-sm min-h-[44px]', // Minimum 44px height for touch
     md: 'px-6 py-3 text-base min-h-[48px]',
     lg: 'px-8 py-4 text-lg min-h-[52px]',
   };
@@ -42,6 +45,7 @@ export const Button: React.FC<ButtonProps> = ({
         ${baseClasses}
         ${variantClasses[variant]}
         ${sizeClasses[size]}
+        ${block ? 'w-full' : 'inline-block'}
         ${loading ? 'pointer-events-none' : ''}
         ${className}
       `.replace(/\s+/g, ' ').trim()}
