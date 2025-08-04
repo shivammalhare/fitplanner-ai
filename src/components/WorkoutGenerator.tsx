@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useWorkoutGenerator } from '../hooks/useWorkoutGenerator';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
+import { useNavigate } from 'react-router-dom';
 
 const MUSCLE_GROUPS = [
   { id: 'chest', name: 'Chest', emoji: '💪' },
@@ -21,6 +22,21 @@ const EQUIPMENT_OPTIONS = [
   { id: 'full_gym', name: 'Full Gym Access', emoji: '🏟️' }
 ];
 
+// WorkoutPreview component integrated here
+const WorkoutPreview: React.FC<{ workout: any; onStart: (id: string) => void }> = ({ workout, onStart }) => {
+  return (
+    <div className="p-4 bg-gray-800 rounded shadow mb-4">
+      <h3 className="text-xl font-bold text-white mb-2">{workout.title}</h3>
+      {/* You can extend this section with more workout summary details */}
+      <div className="mb-4 text-gray-300">{workout.description}</div>
+
+      <Button onClick={() => onStart(workout.workoutId)} variant="primary" className="w-full">
+        Start Workout
+      </Button>
+    </div>
+  );
+};
+
 export const WorkoutGenerator: React.FC = () => {
   const [selectedMuscles, setSelectedMuscles] = useState<string[]>(['chest']);
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>(['full_gym']);
@@ -29,6 +45,8 @@ export const WorkoutGenerator: React.FC = () => {
   const [experience, setExperience] = useState('intermediate');
 
   const { generateWorkout, currentWorkout, loading, error } = useWorkoutGenerator();
+
+  const navigate = useNavigate();
 
   const handleMuscleToggle = (muscleId: string) => {
     setSelectedMuscles(prev =>
@@ -65,22 +83,25 @@ export const WorkoutGenerator: React.FC = () => {
     });
   };
 
+  // Navigate to the workout session page when starting workout
+  const startWorkout = (id: string) => {
+    navigate(`/workout/session/${id}`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black">
       {/* Header */}
       <div className="bg-black/50 backdrop-blur-sm sticky top-0 z-40 border-b border-gray-800">
-        <div className="px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-white">AI Workout Generator</h1>
-              <p className="text-sm text-gray-400">Powered by Perplexity Pro</p>
-            </div>
-            <div className="text-2xl">🤖</div>
+        <div className="px-4 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-white">AI Workout Generator</h1>
+            <p className="text-sm text-gray-400">Powered by Perplexity Pro</p>
           </div>
+          <div className="text-2xl">🤖</div>
         </div>
       </div>
 
-      <div className="px-4 py-6 pb-24">
+      <div className="px-4 py-6 pb-24 overflow-auto">
         {/* Quick Goals */}
         <Card className="mb-6">
           <h3 className="text-lg font-semibold text-white mb-4">Your Goal</h3>
@@ -212,78 +233,11 @@ export const WorkoutGenerator: React.FC = () => {
           🤖 Generate AI Workout
         </Button>
 
-        {/* Generated Workout Display */}
-        {currentWorkout && <WorkoutDisplay workout={currentWorkout} />}
+        {/* Show Workout Preview if generated */}
+        {currentWorkout && (
+          <WorkoutPreview workout={currentWorkout} onStart={startWorkout} />
+        )}
       </div>
     </div>
-  );
-};
-
-// Workout Display Component
-const WorkoutDisplay: React.FC<{ workout: any }> = ({ workout }) => {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
-    >
-      <Card className="bg-gradient-to-r from-green-600 to-blue-600 border-green-500">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-white mb-2">{workout.title}</h2>
-          <p className="text-green-100 mb-4">{workout.description}</p>
-          <div className="flex justify-around text-sm text-green-100">
-            <div>
-              <div className="font-semibold">{workout.exercises?.length || 0}</div>
-              <div className="opacity-80">Exercises</div>
-            </div>
-            <div>
-              <div className="font-semibold">{workout.estimated_duration}min</div>
-              <div className="opacity-80">Duration</div>
-            </div>
-            <div>
-              <div className="font-semibold">{workout.difficulty}</div>
-              <div className="opacity-80">Level</div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Exercises List */}
-      {workout.exercises?.map((exercise: any, index: number) => (
-        <Card key={index}>
-          <div className="flex justify-between items-start mb-3">
-            <h4 className="text-lg font-semibold text-white">{exercise.name}</h4>
-            <span className="text-orange-500 text-sm font-medium">
-              {exercise.sets} sets × {exercise.reps}
-            </span>
-          </div>
-          <p className="text-gray-300 text-sm mb-2">{exercise.instructions}</p>
-          <p className="text-gray-400 text-xs mb-3">💡 {exercise.tips}</p>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-400">Rest: {exercise.rest_seconds}s</span>
-            <div className="flex space-x-1">
-              {exercise.muscle_groups?.map((muscle: string) => (
-                <span key={muscle} className="bg-gray-700 px-2 py-1 rounded text-xs">
-                  {muscle}
-                </span>
-              ))}
-            </div>
-          </div>
-        </Card>
-      ))}
-
-      {/* Start Workout Button */}
-      <Button
-        variant="primary"
-        size="lg"
-        className="w-full"
-        onClick={() => {
-          // Navigate to workout session (Day 5-6 implementation)
-          console.log('Starting workout session...');
-        }}
-      >
-        🚀 Start This Workout
-      </Button>
-    </motion.div>
   );
 };
