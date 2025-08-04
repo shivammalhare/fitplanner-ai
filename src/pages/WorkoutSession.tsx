@@ -1,37 +1,40 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "../utils/supabase";
 import { useAuth } from "../hooks/useAuth";
+import { supabase } from "../utils/supabase";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 
+interface ExerciseSet {
+  reps: string;
+  weight: number;
+  completed: boolean;
+}
+
 interface Exercise {
   name: string;
-  reps: string;
   sets: number;
+  reps: string;
   rest_seconds: number;
   instructions: string;
   tips: string;
   muscle_groups: string[];
   difficulty: string;
+  userSets: ExerciseSet[];
 }
 
 interface Workout {
   id: string;
   title: string;
   description: string;
+  estimated_duration: number | null;
+  difficulty: string;
   exercises: Exercise[];
   warm_up: string[];
   cool_down: string[];
-  estimated_duration: number | null;
+  notes: string | null;
   completed: boolean;
   date: string;
-}
-
-interface SetLog {
-  reps: string;
-  weight: number;
-  completed: boolean;
 }
 
 export const WorkoutSession: React.FC = () => {
@@ -41,24 +44,17 @@ export const WorkoutSession: React.FC = () => {
 
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [currentSetIndex, setCurrentSetIndex] = useState(0);
-
-  // Logs keyed by exercise name, each is array of SetLog
-  const [logs, setLogs] = useState<Record<string, SetLog[]>>({});
-
-  // Timer for rest between sets
+  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
+  const [activeSetIndex, setActiveSetIndex] = useState(0);
   const [timer, setTimer] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch workout & initialize logs
+  // Fetch workout and initialize userSets for each exercise
   useEffect(() => {
     if (!user || !workoutId) {
       setLoading(false);
       return;
     }
-
     const fetchWorkout = async () => {
       setLoading(true);
       try {
@@ -73,272 +69,260 @@ export const WorkoutSession: React.FC = () => {
           setLoading(false);
           return;
         }
-
-        // Parse exercises safely
-        let exercises: Exercise[] = [];
-        if (Array.isArray(data.exercises)) exercises = data.exercises;
+        let exercisesArray: any[] = [];
+        if (Array.isArray(data.exercises)) exercisesArray = data.exercises;
         else if (typeof data.exercises === "string") {
           try {
             const parsed = JSON.parse(data.exercises);
-            if (Array.isArray(parsed)) exercises = parsed;
+            if (Array.isArray(parsed)) exercisesArray = parsed;
           } catch {
-            // fallback empty
+            exercisesArray = [];
           }
         }
-
-        setWorkout({
-          id: data.id,
-          title: data.title || "Workout",
-          description: data.description || "",
-          exercises,
-          warm_up: data.warm_up || [],
-          cool_down: data.cool_down || [],
-          estimated_duration: data.estimated_duration ?? null,
-          completed: data.completed,
-          date: data.date,
-        });
-
-        // Initialize empty logs for all exercises
-        const initialLogs: Record<string, SetLog[]> = {};
-        exercises.forEach((ex) => {
-          initialLogs[ex.name] = Array(ex.sets)
+        const exercisesWithUserSets: Exercise[] = (exercisesArray ?? []).map((ex) => ({
+          ...ex,
+          userSets: Array(Number(ex.sets) || 0)
             .fill(null)
-            .map(() => ({ reps: "", weight: 0, completed: false }));
-        });
-        setLogs(initialLogs);
+            .map(() => ({ reps: "", weight: 0, completed: false })),
+        }));
+        setWorkout({ ...data, exercises: exercisesWithUserSets });
       } catch {
         setWorkout(null);
       } finally {
         setLoading(false);
       }
     };
-
     fetchWorkout();
   }, [user, workoutId]);
 
-  // Timer effect for rest periods
+  // Rest timer
   useEffect(() => {
     if (timer === null) return;
-
     if (timer <= 0) {
       clearInterval(timerRef.current!);
       setTimer(null);
       return;
     }
-
-    timerRef.current = setInterval(() => {
-      setTimer((prev) => (prev !== null ? prev - 1 : null));
-    }, 1000);
-
+    timerRef.current = setInterval(
+      () => setTimer((prev) => (prev ? prev - 1 : null)),
+      1000
+    );
     return () => clearInterval(timerRef.current!);
   }, [timer]);
 
-  const currentExercise = workout?.exercises?.[currentExerciseIndex];
-  const currentExerciseLogs = currentExercise ? logs[currentExercise.name] : [];
-  const currentSetLog = currentExerciseLogs?.[currentSetIndex];
+  const handleSetInputChange = (
+    exIdx: number,
+    setIdx: number,
+    field: "weight" | "reps",
+    val: string
+  ) => {
+    if (!workout) return;
+    const updatedExercises = [...(workout.exercises ?? [])];
+    if (!Array.isArray(updatedExercises[exIdx]?.userSets)) {
+      updatedExercises[exIdx].userSets = [];
+    }
+    const userSets: ExerciseSet[] = Array.isArray(updatedExercises[exIdx].userSets)
+      ? [...updatedExercises[exIdx].userSets]
+      : [];
+    const setEntry: ExerciseSet = userSets[setIdx] ?? { reps: "", weight: 0, completed: false };
 
-  const updateLog = (field: keyof SetLog, value: string | number | boolean) => {
-    if (!currentExercise) return;
-
-    setLogs((prev) => {
-      const exerciseLogs = [...(prev[currentExercise.name] || [])];
-      const currentLog = exerciseLogs[currentSetIndex] || {
-        reps: "",
-        weight: 0,
-        completed: false,
-      };
-
-      let updatedLog = currentLog;
-
-      if (field === "weight" && typeof value === "number") {
-        updatedLog = { ...currentLog, weight: value };
-      } else if (field === "reps" && typeof value === "string") {
-        updatedLog = { ...currentLog, reps: value };
-      } else if (field === "completed" && typeof value === "boolean") {
-        updatedLog = { ...currentLog, completed: value };
-      }
-      exerciseLogs[currentSetIndex] = updatedLog;
-
-      return { ...prev, [currentExercise.name]: exerciseLogs };
-    });
+    if (field === "weight") setEntry.weight = Number(val);
+    else setEntry.reps = val;
+    userSets[setIdx] = setEntry;
+    updatedExercises[exIdx].userSets = userSets;
+    setWorkout({ ...workout, exercises: updatedExercises });
   };
 
-  // Progresses to next set or exercise, or triggers completion
   const handleCompleteSet = () => {
-    if (!currentSetLog) {
-      alert("Please enter reps and weight before completing the set.");
+    if (!workout) return;
+    const ex = workout.exercises?.[activeExerciseIndex];
+    const userSets = Array.isArray(ex?.userSets) ? ex.userSets : [];
+    const curSet = userSets?.[activeSetIndex];
+    if (!curSet) return;
+    if (!curSet.reps || curSet.weight === undefined || curSet.weight <= 0) {
+      alert("Please enter reps and a positive weight before completing the set");
       return;
     }
-    if (!currentSetLog.reps || currentSetLog.reps.trim() === "" || !currentSetLog.weight) {
-      alert("Reps and weight are required.");
-      return;
-    }
+    curSet.completed = true;
+    const updatedExercises = [...(workout.exercises ?? [])];
+    updatedExercises[activeExerciseIndex].userSets = userSets;
+    setWorkout({ ...workout, exercises: updatedExercises });
 
-    updateLog("completed", true);
-
-    if (currentSetIndex < (currentExercise!.sets - 1)) {
-      setTimer(currentExercise!.rest_seconds);
-      setCurrentSetIndex(currentSetIndex + 1);
-    } else if (currentExerciseIndex < (workout!.exercises.length - 1)) {
-      setCurrentExerciseIndex(currentExerciseIndex + 1);
-      setCurrentSetIndex(0);
+    if (activeSetIndex < ex.sets - 1) {
+      setTimer(ex.rest_seconds);
+      setActiveSetIndex(activeSetIndex + 1);
+    } else if (activeExerciseIndex < updatedExercises.length - 1) {
+      setActiveExerciseIndex(activeExerciseIndex + 1);
+      setActiveSetIndex(0);
       setTimer(null);
     } else {
-      alert("Workout completed! Saving data...");
-      handleFinishWorkout();
+      alert("Workout Complete! Saving...");
+      markWorkoutComplete();
     }
   };
 
-  // Save logs to DB then mark workout completed
-  const handleFinishWorkout = async () => {
-    if (!workout || !user) return;
-
-    const insertPayload = Object.entries(logs).map(([exercise_name, exerciseLogs]) => ({
+  const saveWorkoutLogs = async () => {
+    if (!user || !workout) return;
+    // Batch insert (no .map on possibly undefined)
+    const insertPayload = (workout.exercises ?? []).map((ex) => ({
       user_id: user.id,
       workout_id: workout.id,
-      exercise_name,
-      sets: exerciseLogs,
+      exercise_name: ex.name,
+      sets: Array.isArray(ex.userSets)
+        ? ex.userSets.map((s) => ({
+            reps: s.reps,
+            weight: s.weight,
+            completed: !!s.completed,
+          }))
+        : [],
       personal_record: false,
       created_at: new Date().toISOString(),
     }));
-
-    try {
-      const { error } = await supabase.from("exercise_logs").insert(insertPayload);
-      if (error) {
-        console.error("Failed to save exercise logs:", error);
-        alert("Error saving logs. Please try again.");
-        return;
-      }
-
-      const { error: updateError } = await supabase
-        .from("workouts")
-        .update({ completed: true })
-        .eq("id", workout.id);
-
-      if (updateError) {
-        console.error("Failed to mark workout completed:", updateError);
-        alert("Error updating workout status.");
-        return;
-      }
-
-      alert("Workout saved successfully!");
-      navigate("/dashboard");
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      alert("Unexpected error occurred.");
+    const { error } = await supabase.from("exercise_logs").insert(insertPayload);
+    if (error) {
+      console.error("Error saving logs:", error);
+      alert("Error saving log. Please try again.");
     }
   };
 
-  if (loading) return <div className="p-4 text-white">Loading...</div>;
+  const markWorkoutComplete = async () => {
+    await saveWorkoutLogs();
+    await supabase
+      .from("workouts")
+      .update({ completed: true })
+      .eq("id", workoutId);
+    navigate("/dashboard");
+  };
 
-  if (!workout)
+  if (loading) {
     return (
-      <div className="p-4 text-white">
-        <p>Workout not found.</p>
-        <Button onClick={() => navigate(-1)}>Go Back</Button>
+      <div className="min-h-screen flex items-center justify-center text-white">
+        Loading workout...
       </div>
     );
-
-  if (!currentExercise)
+  }
+  if (!workout) {
     return (
-      <div className="p-4 text-white">
-        <p>Current exercise not found.</p>
-        <Button onClick={() => navigate(-1)}>Go Back</Button>
+      <div className="min-h-screen flex flex-col items-center justify-center text-white px-4">
+        <p className="mb-4">Workout not found or failed to load.</p>
+        <Button onClick={() => navigate(-1)} variant="secondary">
+          Go Back
+        </Button>
       </div>
     );
+  }
+
+  // Defensive: always fallback to safe arrays in all rendering
+  const ex = workout.exercises?.[activeExerciseIndex] ?? {};
+  const userSets: ExerciseSet[] = Array.isArray(ex.userSets) ? ex.userSets : [];
+  const curSet = userSets?.[activeSetIndex] ?? { reps: "", weight: 0, completed: false };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col">
+    <div className="min-h-screen bg-gray-900 text-white p-4 pt-12 flex flex-col">
       <div className="flex items-center mb-4">
-        <Button onClick={() => navigate(-1)} variant="secondary" aria-label="Back" className="mr-4">
+        <Button
+          onClick={() => navigate(-1)}
+          variant="secondary"
+          className="text-orange-500 text-3xl font-bold mr-4"
+          aria-label="Go Back"
+        >
           ←
         </Button>
-        <h1 className="flex-grow text-2xl font-semibold">{workout.title}</h1>
+        <h1 className="text-xl font-bold flex-1">{workout.title}</h1>
       </div>
-
-      <p className="mb-2 text-gray-400">{workout.description}</p>
-      <p className="mb-6 italic text-gray-400">
-        Estimated duration: {workout.estimated_duration ?? "N/A"} minutes
+      <p className="text-gray-400 text-sm mb-2">{workout.description}</p>
+      <p className="text-gray-400 text-sm italic mb-4">
+        Estimated duration: {workout.estimated_duration ?? "N/A"} min
       </p>
-
-      <Card className="flex-grow overflow-auto p-4 bg-gray-800">
+      <Card className="flex flex-col flex-1 overflow-auto p-4 bg-gray-800">
+        <section className="mb-4">
+          <h2 className="text-lg font-semibold mb-1">Warm-up</h2>
+          <ul className="list-disc list-inside text-gray-300 text-sm">
+            {(Array.isArray(workout.warm_up) ? workout.warm_up : []).map((item, idx) => (
+              <li key={idx}>{item}</li>
+            ))}
+          </ul>
+        </section>
         <section className="mb-6">
-          <h2 className="mb-2 text-lg font-semibold">Warm-up</h2>
-          <ul className="mb-6 list-disc list-inside text-sm text-gray-400">
-            {workout.warm_up.map((item, idx) => (
-              <li key={idx}>{item}</li>
-            ))}
-          </ul>
-
-          <h2 className="mb-2 text-xl font-semibold">
-            Exercise {currentExerciseIndex + 1} of {workout.exercises.length}
+          <h2 className="text-xl font-bold mb-2">
+            Exercise {activeExerciseIndex + 1} of {Array.isArray(workout.exercises) ? workout.exercises.length : 0}
           </h2>
-          <h3 className="mb-2 text-lg font-semibold">{currentExercise.name}</h3>
-          <p className="mb-2 text-sm text-gray-400">
-            Set {currentSetIndex + 1} of {currentExercise.sets}
+          <h3 className="text-lg font-semibold mb-1">{ex.name}</h3>
+          <p className="text-gray-400 text-sm mb-2">
+            Set {activeSetIndex + 1} of {ex.sets ?? 0}
           </p>
-          <p className="mb-2 italic text-gray-500">{currentExercise.instructions}</p>
-          <p className="mb-4 italic text-gray-500">{currentExercise.tips}</p>
-
-          <div className="mb-4 flex gap-4">
-            <div className="flex-grow">
-              <label htmlFor="reps" className="block mb-1 text-sm text-gray-300">
-                Reps
-              </label>
+          <p className="mb-1 text-gray-300 italic">{ex.instructions}</p>
+          <p className="mb-4 text-gray-400 italic text-sm">💡 {ex.tips}</p>
+          <div className="flex space-x-4 mb-2">
+            <label className="flex flex-col flex-1">
+              <span className="text-sm text-gray-300 mb-1">Reps</span>
               <input
-                id="reps"
                 type="text"
-                inputMode="numeric"
-                value={logs[currentExercise.name]?.[currentSetIndex]?.reps || ""}
-                onChange={(e) => updateLog("reps", e.target.value)}
-                className="w-full rounded border border-gray-600 bg-gray-700 px-2 py-1 text-white focus:outline-none"
+                placeholder={ex.reps}
+                value={curSet.reps}
+                onChange={(e) =>
+                  handleSetInputChange(
+                    activeExerciseIndex,
+                    activeSetIndex,
+                    "reps",
+                    e.target.value
+                  )
+                }
+                className="p-2 rounded bg-gray-700 text-white border border-gray-600 text-center"
               />
-            </div>
-
-            <div className="flex-grow">
-              <label htmlFor="weight" className="block mb-1 text-sm text-gray-300">
-                Weight (kg)
-              </label>
+            </label>
+            <label className="flex flex-col flex-1">
+              <span className="text-sm text-gray-300 mb-1">Weight (kg)</span>
               <input
-                id="weight"
                 type="number"
+                placeholder="kg"
+                value={curSet.weight || ""}
+                onChange={(e) =>
+                  handleSetInputChange(
+                    activeExerciseIndex,
+                    activeSetIndex,
+                    "weight",
+                    e.target.value
+                  )
+                }
+                className="p-2 rounded bg-gray-700 text-white border border-gray-600 text-center"
+                step="0.5"
                 min={0}
-                step={0.5}
-                inputMode="decimal"
-                value={logs[currentExercise.name]?.[currentSetIndex]?.weight || ""}
-                onChange={(e) => updateLog("weight", Number(e.target.value))}
-                className="w-full rounded border border-gray-600 bg-gray-700 px-2 py-1 text-white focus:outline-none"
               />
-            </div>
+            </label>
           </div>
-
-          <Button onClick={handleCompleteSet} variant="primary" block>
-            Mark Set Completed
+          <Button
+            onClick={handleCompleteSet}
+            variant="primary"
+            className="w-full py-3"
+          >
+            Mark Set as Completed
           </Button>
+          {timer !== null && timer > 0 && (
+            <p className="mt-2 text-center text-orange-400 text-lg font-mono">
+              Rest Timer: {timer} sec
+            </p>
+          )}
         </section>
-
         <section>
-          <h2 className="mb-2 text-lg font-semibold">Cool-down</h2>
-          <ul className="list-disc list-inside text-sm text-gray-400">
-            {workout.cool_down.map((item, idx) => (
+          <h2 className="text-lg font-semibold mb-1">Cool-down</h2>
+          <ul className="list-disc list-inside text-gray-300 text-sm">
+            {(Array.isArray(workout.cool_down) ? workout.cool_down : []).map((item, idx) => (
               <li key={idx}>{item}</li>
             ))}
           </ul>
         </section>
-
-        {currentExerciseIndex === workout.exercises.length - 1 &&
-          currentSetIndex === currentExercise.sets - 1 && (
-            <Button onClick={handleFinishWorkout} variant="secondary" block className="mt-6">
+        {activeExerciseIndex === (Array.isArray(workout.exercises) ? workout.exercises.length - 1 : -1) &&
+          activeSetIndex === (ex.sets ?? 1) - 1 && (
+            <Button
+              onClick={markWorkoutComplete}
+              variant="secondary"
+              className="mt-6 w-full py-3"
+            >
               Finish Workout
             </Button>
           )}
       </Card>
-
-      {timer !== null && (
-        <div className="fixed bottom-20 inset-x-0 text-center text-orange-400 text-xl font-mono">
-          Rest Timer: {timer} sec
-        </div>
-      )}
     </div>
   );
 };
