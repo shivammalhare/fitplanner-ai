@@ -107,10 +107,11 @@ export const WorkoutGenerator: React.FC = () => {
           <h3 className="text-lg font-semibold text-white mb-4">Your Goal</h3>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { id: 'muscle_gain', name: 'Build Muscle', emoji: '💪' },
-              { id: 'fat_loss', name: 'Lose Fat', emoji: '🔥' },
-              { id: 'strength', name: 'Get Stronger', emoji: '⚡' },
-              { id: 'maintenance', name: 'Stay Fit', emoji: '✨' }
+              { id: "muscle_gain", name: "Build Muscle", emoji: "💪", mappedGoal: "hypertrophy" },
+              { id: "strength", name: "Get Stronger", emoji: "⚡", mappedGoal: "strength" },
+              { id: "maintenance", name: "Stay Fit", emoji: "✨", mappedGoal: "maintenance" },
+              { id: "endurance", name: "Endurance", emoji: "🏃", mappedGoal: "endurance" },
+              { id: "fat_loss", name: "Lose Fat", emoji: "🔥", mappedGoal: "fat_loss" },
             ].map((goalOption) => (
               <button
                 key={goalOption.id}

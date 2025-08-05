@@ -53,7 +53,9 @@ export const useWorkoutGenerator = () => {
           muscle_groups: params.targetMuscles,
           exercises: generatedWorkout.exercises,
           ai_generated: true,
-          completed: false
+          completed: false,
+          goal: workoutRequest.goal
+
         })
         .select()
         .single();
