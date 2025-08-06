@@ -33,6 +33,14 @@ export const WorkoutPlanner: React.FC = () => {
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
 
+  // Swap modal state
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapWorkoutId, setSwapWorkoutId] = useState<string | null>(null);
+  const [swapExerciseIndex, setSwapExerciseIndex] = useState<number | null>(null);
+  const [swapAlternatives, setSwapAlternatives] = useState<Exercise[]>([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
+
+  // Get current week's Mon-Sun dates
   const getMonday = (d: Date) => {
     d = new Date(d);
     const day = d.getDay(),
@@ -93,13 +101,127 @@ export const WorkoutPlanner: React.FC = () => {
     workoutsByDate[date] = filteredWorkouts.filter((w) => w.date === date);
   }
 
-  function handleSwapWorkout(workoutId: string, exIdx: number) {
-    alert(`Swap exercise #${exIdx + 1} in workout: ${workoutId} (Coming soon!)`);
+  // Open swap modal and load alternatives
+  async function handleSwapWorkout(workoutId: string, exIdx: number) {
+    setSwapWorkoutId(workoutId);
+    setSwapExerciseIndex(exIdx);
+    setSwapModalOpen(true);
+    setLoadingAlternatives(true);
+
+    try {
+      // Fetch all unique exercises from user's workouts in the week as alternatives
+      const { data } = await supabase
+        .from("workouts")
+        .select("exercises")
+        .eq("user_id", user!.id)
+        .gte("date", weekDates[0])
+        .lte("date", weekDates[6])
+        .order("date");
+
+      let allExercises: Exercise[] = [];
+
+      (data || []).forEach((w: any) => {
+        let exercisesList: Exercise[] = [];
+        if (typeof w.exercises === "string") {
+          exercisesList = JSON.parse(w.exercises);
+        } else if (Array.isArray(w.exercises)) {
+          exercisesList = w.exercises;
+        }
+        exercisesList.forEach((ex) => {
+          if (!allExercises.find((a) => a.name === ex.name)) {
+            allExercises.push(ex);
+          }
+        });
+      });
+
+      // Remove the current exercise from alternatives, if possible
+      const workout = workouts.find((w) => w.id === workoutId);
+      const currentExerciseName = workout?.exercises?.[exIdx]?.name;
+
+      if (currentExerciseName) {
+        allExercises = allExercises.filter((ex) => ex.name !== currentExerciseName);
+      }
+
+      setSwapAlternatives(allExercises);
+    } catch {
+      setSwapAlternatives([]);
+    }
+
+    setLoadingAlternatives(false);
+  }
+
+  // Perform swap: update DB and UI
+  async function performSwap(alternative: Exercise) {
+    if (!swapWorkoutId || swapExerciseIndex === null) return;
+
+    const workout = workouts.find((w) => w.id === swapWorkoutId);
+    if (!workout) return;
+
+    const newExercises = workout.exercises.map((ex, idx) =>
+      idx === swapExerciseIndex ? { ...alternative } : ex
+    );
+
+    const { error } = await supabase
+      .from("workouts")
+      .update({ exercises: newExercises })
+      .eq("id", workout.id);
+
+    if (!error) {
+      setWorkouts((ws) =>
+        ws.map((w) =>
+          w.id === workout.id
+            ? { ...w, exercises: newExercises }
+            : w
+        )
+      );
+      setSwapModalOpen(false);
+    } else {
+      alert("Failed to swap exercise. Please try again.");
+    }
   }
 
   function handleAskCoach() {
     alert("Ask Coach AI (Coming soon!)");
   }
+
+  // Modal component inline (for swap)
+  const SwapModal = () => {
+    if (!swapModalOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-black/70 z-60 flex items-center justify-center">
+        <div className="bg-gray-900 rounded-lg p-6 w-full max-w-lg shadow-lg relative">
+          <button
+            className="absolute top-3 right-3 text-white text-2xl font-bold hover:text-orange-500"
+            onClick={() => setSwapModalOpen(false)}
+            aria-label="Close swap modal"
+          >
+            &times;
+          </button>
+          <h2 className="text-xl font-bold text-white mb-4">Swap Exercise</h2>
+          {loadingAlternatives ? (
+            <p className="text-orange-400 text-center">Loading alternatives...</p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {swapAlternatives.length === 0 && (
+                <p className="text-gray-400 text-center">No alternatives available</p>
+              )}
+              {swapAlternatives.map((alt, i) => (
+                <button
+                  key={i}
+                  className="w-full text-left p-3 rounded-md bg-gray-800 text-white hover:bg-orange-600 transition"
+                  onClick={() => performSwap(alt)}
+                >
+                  <div className="font-semibold">{alt.name}</div>
+                  <div className="text-orange-300">{`${alt.sets} x ${alt.reps}`}{alt.weight ? ` @${alt.weight}kg` : ""}</div>
+                  {alt.notes && <div className="text-xs italic text-orange-400">Tip: {alt.notes}</div>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -113,7 +235,7 @@ export const WorkoutPlanner: React.FC = () => {
       </nav>
 
       {/* Toggle Buttons below Navbar */}
-      <div className="fixed top-14 left-0 right-0 z-40  border-gray-800 shadow">
+      <div className="fixed top-14 left-0 right-0 z-40 bg-black/80 backdrop-blur-sm border-b border-gray-800 shadow">
         <div className="max-w-4xl mx-auto flex justify-center p-2 space-x-2">
           <button
             onClick={() => setViewMode("split")}
@@ -246,17 +368,47 @@ export const WorkoutPlanner: React.FC = () => {
               >
                 💬 AI Coach
               </Button>
-              
             </div>
-            
           </>
-
         )}
-
       </main>
-      {/* Footer */}
+
+      {/* Swap Modal */}
+      {swapModalOpen && (
+        <div className="fixed inset-0 bg-black/70 z-60 flex items-center justify-center">
+          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-lg shadow-lg relative">
+            <button
+              className="absolute top-3 right-3 text-white text-2xl font-bold hover:text-orange-500"
+              onClick={() => setSwapModalOpen(false)}
+              aria-label="Close swap modal"
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold text-white mb-4">Swap Exercise</h2>
+            {loadingAlternatives ? (
+              <p className="text-orange-400 text-center">Loading alternatives...</p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto space-y-2">
+                {swapAlternatives.length === 0 && (
+                  <p className="text-gray-400 text-center">No alternatives available</p>
+                )}
+                {swapAlternatives.map((alt, i) => (
+                  <button
+                    key={i}
+                    className="w-full text-left p-3 rounded-md bg-gray-800 text-white hover:bg-orange-600 transition"
+                    onClick={() => performSwap(alt)}
+                  >
+                    <div className="font-semibold">{alt.name}</div>
+                    <div className="text-orange-300">{`${alt.sets} x ${alt.reps}`}{alt.weight ? ` @${alt.weight}kg` : ""}</div>
+                    {alt.notes && <div className="text-xs italic text-orange-400">Tip: {alt.notes}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
-        
   );
 };
 
