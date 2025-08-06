@@ -184,6 +184,7 @@ export const WorkoutSession: React.FC = () => {
       alert("Error saving log. Please try again.");
     }
   };
+  
 
   const markWorkoutComplete = async () => {
     await saveWorkoutLogs();
